@@ -1,0 +1,116 @@
+#cloud-config
+autoinstall:
+  version: 1
+  
+  # Locale and keyboard
+  locale: en_US.UTF-8
+  keyboard:
+    layout: ch
+    variant: de_nodeadkeys
+  
+  # Network configuration
+  network:
+    network:
+      version: 2
+      ethernets:
+        any:
+          match:
+            name: en*
+          dhcp4: true
+          dhcp6: true
+  
+  # Storage configuration
+  storage:
+    layout:
+      name: direct
+    config:
+      - type: disk
+        id: disk0
+        ptable: gpt
+        match:
+          ssd: true
+      - type: partition
+        id: partition-efi
+        device: disk0
+        size: 512M
+        flag: boot
+      - type: format
+        id: format-efi
+        volume: partition-efi
+        fstype: fat32
+      - type: mount
+        id: mount-efi
+        device: format-efi
+        path: /boot/efi
+      - type: partition
+        id: partition-boot
+        device: disk0
+        size: 2G
+      - type: format
+        id: format-boot
+        volume: partition-boot
+        fstype: ext4
+      - type: mount
+        id: mount-boot
+        device: format-boot
+        path: /boot
+      - type: partition
+        id: partition-root
+        device: disk0
+        size: -1
+      - type: format
+        id: format-root
+        volume: partition-root
+        fstype: ext4
+      - type: mount
+        id: mount-root
+        device: format-root
+        path: /
+  
+  # Identity configuration
+  identity:
+    hostname: ubuntu-server
+    username: adminlocal
+    # Password: Passwort2025*
+    password: "$6$OOMiGCTiPHwsPn2s$E4CIiFi2pmpMgptJa.32ZiCJjZSIk13VJClZJGXtm6e8Af6uimjxwbW6C8EItKaowOifugeqDQb6kbkiRHasi/"
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+  
+  # Package selection
+  packages:
+    - vim
+    - wget
+    - curl
+    - net-tools
+    - bind9-host
+    - openssh-server
+  
+  # Late commands (post-installation)
+  late-commands:
+    # Disable root
+    - curtin in-target --target=/target -- passwd -l root
+    
+    # Set timezone
+    - curtin in-target --target=/target -- timedatectl set-timezone Europe/Zurich
+    
+    # Configure adminlocal user
+    - curtin in-target --target=/target -- usermod -aG sudo adminlocal
+    
+    # Disable firewall
+    - curtin in-target --target=/target -- systemctl disable ufw
+    - curtin in-target --target=/target -- systemctl stop ufw
+    
+    # Update system
+    - curtin in-target --target=/target -- apt-get update
+    - curtin in-target --target=/target -- apt-get upgrade -y
+    
+    # Enable SSH
+    - curtin in-target --target=/target -- systemctl enable ssh
+    - curtin in-target --target=/target -- systemctl start ssh
+    
+    # Configure sudo for adminlocal
+    - echo "adminlocal ALL=(ALL) ALL" > /target/etc/sudoers.d/adminlocal
+    - chmod 440 /target/etc/sudoers.d/adminlocal
